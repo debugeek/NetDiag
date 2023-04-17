@@ -15,8 +15,8 @@ public enum DNSResolverError: Error {
 
 public class DNSResolver {
 
-    private let hostname: CFString
-    private var completion: (([Data]?, Error?) -> Void)
+    private let hostname: String
+    private var completion: (([Address]?, Error?) -> Void)
 
     private var host: CFHost?
 
@@ -24,7 +24,7 @@ public class DNSResolver {
         stop()
     }
 
-    public init(hostname: CFString, completion: @escaping (([Data]?, Error?) -> Void)) {
+    public init(hostname: String, completion: @escaping (([Address]?, Error?) -> Void)) {
         self.hostname = hostname
         self.completion = completion
     }
@@ -32,7 +32,7 @@ public class DNSResolver {
     public func start() {
         assert(host == nil)
 
-        let host = CFHostCreateWithName(kCFAllocatorDefault, hostname).takeRetainedValue()
+        let host = CFHostCreateWithName(kCFAllocatorDefault, hostname as CFString).takeRetainedValue()
         self.host = host
 
         var context = CFHostClientContext()
@@ -78,7 +78,16 @@ public class DNSResolver {
     func didSuccessWithAddresses(_ addresses: [Data]) {
         stop()
 
-        completion(addresses, nil)
+        completion(addresses.compactMap { address in
+            let addr = address.withUnsafeBytes { $0.load(as: sockaddr.self) }
+            if addr.sa_family == AF_INET {
+                return .ipv4(address.withUnsafeBytes { $0.load(as: sockaddr_in.self) }.sin_addr)
+            } else if addr.sa_family == AF_INET6 {
+                return .ipv6(address.withUnsafeBytes { $0.load(as: sockaddr_in6.self) }.sin6_addr)
+            } else {
+                return nil
+            }
+        }, nil)
     }
 
     func didFailWithHostStreamError(_ error: CFStreamError) {
