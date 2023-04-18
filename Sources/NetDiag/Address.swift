@@ -46,5 +46,28 @@ extension Address {
         }
         return sockaddr_storage
     }
-    
+
+    public var sockaddr: Darwin.sockaddr {
+        var sockaddr = Darwin.sockaddr()
+        switch self {
+            case .ipv4(let addr):
+                withUnsafeMutablePointer(to: &sockaddr, { ptr in
+                    ptr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { ptr in
+                        ptr.pointee.sin_family = sa_family_t(AF_INET)
+                        ptr.pointee.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+                        ptr.pointee.sin_addr = addr
+                    }
+                })
+            case .ipv6(let addr):
+                withUnsafeMutablePointer(to: &sockaddr, { ptr in
+                    ptr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { ptr in
+                        ptr.pointee.sin6_family = sa_family_t(AF_INET6)
+                        ptr.pointee.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
+                        ptr.pointee.sin6_addr = addr
+                    }
+                })
+        }
+        return sockaddr
+    }
+
 }
