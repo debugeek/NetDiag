@@ -123,6 +123,16 @@ public class Ping {
         }
     }
     
+    public func setMaxTTL(_ ttl: Int32) {
+        var ttl = ttl
+        switch address {
+            case .ipv4:
+                setsockopt(CFSocketGetNative(socket), IPPROTO_IP, IP_TTL, &ttl, socklen_t(MemoryLayout<Int32>.size))
+            case .ipv6:
+                setsockopt(CFSocketGetNative(socket), IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl, socklen_t(MemoryLayout<Int32>.size))
+        }
+    }
+    
 }
 
 private func readCallback(socket: CFSocket?, type: CFSocketCallBackType, address: CFData?, data: UnsafeRawPointer?, info: UnsafeMutableRawPointer?) -> Void {
