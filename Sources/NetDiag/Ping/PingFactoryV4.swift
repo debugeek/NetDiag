@@ -11,6 +11,7 @@ import Foundation
 public enum ICMPType: UInt8 {
     case echoReply   = 0
     case echoRequest = 8
+    case timeToLiveExceeded = 11
 }
 
 struct IPHeader {
@@ -71,6 +72,27 @@ class PingFactoryV4: PingFactory {
             identifier = ICMPHeader.identifier
             sequenceNumber = CFSwapInt16BigToHost(ICMPHeader.sequenceNumber)
             timeToLive = IPHeader.timeToLive
+        } else if ICMPHeader.type == ICMPType.timeToLiveExceeded.rawValue {
+            dataBuf = dataBuf.advanced(by: headerLen)
+
+            guard let IPHeader = readIPHeader(dataBuf, &headerLen) else {
+                return PingError.unexpectedPacket
+            }
+            dataBuf = dataBuf.advanced(by: headerLen)
+
+            guard let ICMPHeader = readICMPHeader(dataBuf, &headerLen) else {
+                return PingError.unexpectedPacket
+            }
+
+            if ICMPHeader.type == ICMPType.echoRequest.rawValue {
+                identifier = ICMPHeader.identifier
+                sequenceNumber = CFSwapInt16BigToHost(ICMPHeader.sequenceNumber)
+                timeToLive = IPHeader.timeToLive
+
+                return PingError.timeToLiveExceeded
+            } else {
+                return PingError.unexpectedPacket
+            }
         } else {
             return PingError.unexpectedPacket
         }

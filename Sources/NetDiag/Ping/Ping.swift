@@ -12,6 +12,7 @@ public enum PingError: Error {
     case socketError
     case timeout
     case unexpectedPacket
+    case timeToLiveExceeded
 }
 
 public struct PingResult {
