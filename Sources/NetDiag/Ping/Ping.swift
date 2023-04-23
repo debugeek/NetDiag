@@ -100,10 +100,14 @@ public class Ping {
         let sequenceNumber = nextSequenceNumber
         nextSequenceNumber += 1
 
-        var sendBuf = factory.buildPacket(identifier: identifier, sequenceNumber: sequenceNumber, payload: payload)
-
-        let bytesSent = withUnsafePointer(to: address.sockaddr) { addrPtr in
-            sendto(CFSocketGetNative(socket), &sendBuf, sendBuf.count, 0, addrPtr, socklen_t(addrPtr.pointee.sa_len))
+        let sendBuf = factory.buildPacket(identifier: identifier, sequenceNumber: sequenceNumber, payload: payload)
+        let bytesSent = sendBuf.withUnsafeBytes { sendBufPtr in
+            guard let sendBufPtrAddr = sendBufPtr.baseAddress else { return -1 }
+            return withUnsafePointer(to: address.sockaddr_storage) { storagePtr in
+                storagePtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { addrPtr in
+                    sendto(CFSocketGetNative(socket), sendBufPtrAddr, sendBufPtr.count, 0, addrPtr, socklen_t(addrPtr.pointee.sa_len))
+                }
+            }
         }
         if bytesSent > 0 {
             let action = PingAction(sendTime: mach_absolute_time())
