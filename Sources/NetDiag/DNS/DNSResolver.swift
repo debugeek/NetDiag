@@ -70,6 +70,8 @@ public class DNSResolver {
             return
         }
 
+        Unmanaged.passUnretained(self).release()
+        
         CFHostSetClient(host, nil, nil)
         CFHostUnscheduleFromRunLoop(host, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         self.host = nil
