@@ -11,6 +11,7 @@ import Foundation
 public enum ICMP6Type: UInt8 {
     case echoRequest = 128
     case echoReply   = 129
+    case timeExceeded = 3
 }
 
 class PingFactoryV6: PingFactory {
@@ -36,14 +37,6 @@ class PingFactoryV6: PingFactory {
         guard let ICMPHeader = readICMPHeader(dataBuf, &headerLen) else {
             return PingError.unexpectedPacket
         }
-        dataBuf = dataBuf.advanced(by: headerLen)
-        
-        guard ICMPHeader.type == ICMP6Type.echoReply.rawValue else {
-            return PingError.unexpectedPacket
-        }
-        
-        identifier = ICMPHeader.identifier
-        sequenceNumber = CFSwapInt16BigToHost(ICMPHeader.sequenceNumber)
 
         var cmsgBuf = cmsgBuf
         timeToLive = cmsgBuf.withUnsafeMutableBytes { cmsgBufPtr in
@@ -54,10 +47,51 @@ class PingFactoryV6: PingFactory {
                 return nil
             }
         }
+
+        if ICMPHeader.type == ICMP6Type.echoReply.rawValue {
+            identifier = ICMPHeader.identifier
+            sequenceNumber = CFSwapInt16BigToHost(ICMPHeader.sequenceNumber)
+        } else if ICMPHeader.type == ICMP6Type.timeExceeded.rawValue {
+            dataBuf = dataBuf.advanced(by: headerLen)
+
+            guard let _ = readIPHeader(dataBuf, &headerLen) else {
+                return PingError.unexpectedPacket
+            }
+            dataBuf = dataBuf.advanced(by: headerLen)
+
+            guard let ICMPHeader = readICMPHeader(dataBuf, &headerLen) else {
+                return PingError.unexpectedPacket
+            }
+
+            if ICMPHeader.type == ICMP6Type.echoRequest.rawValue {
+                identifier = ICMPHeader.identifier
+                sequenceNumber = CFSwapInt16BigToHost(ICMPHeader.sequenceNumber)
+
+                return PingError.timeToLiveExceeded
+            } else {
+                return PingError.unexpectedPacket
+            }
+        } else {
+            return PingError.unexpectedPacket
+        }
         
         return nil
     }
-    
+
+    func readIPHeader(_ dataBuf: Data, _ headerLen: inout Int) -> ip6_hdr? {
+        guard dataBuf.count >= MemoryLayout<ip6_hdr>.size else {
+            return nil
+        }
+
+        let header = dataBuf.withUnsafeBytes {
+            $0.load(as: ip6_hdr.self)
+        }
+
+        headerLen = MemoryLayout<ip6_hdr>.size
+
+        return header
+    }
+
     func readICMPHeader(_ dataBuf: Data, _ headerLen: inout Int) -> ICMPHeader? {
         guard dataBuf.count >= MemoryLayout<ICMPHeader>.size else {
             return nil
