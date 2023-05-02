@@ -20,6 +20,7 @@ public struct PingResult {
     public private(set) var error: Error?
     public private(set) var ttl: UInt8?
     public private(set) var rtt: TimeInterval?
+    public private(set) var src: String?
 }
 
 protocol PingFactory {
@@ -88,6 +89,7 @@ public class Ping {
         switch address {
             case .ipv4:
                 setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &opt, socklen_t(MemoryLayout<Int32>.size))
+                
             case .ipv6:
                 setsockopt(fd, IPPROTO_IPV6, IPV6_2292HOPLIMIT, &opt, socklen_t(MemoryLayout<Int32>.size))
         }
@@ -150,10 +152,11 @@ private func readCallback(socket: CFSocket?, type: CFSocketCallBackType, address
     
     let recvTime = mach_absolute_time()
     
+    var srcAddr = sockaddr_storage()
     var cmsgBuf = [UInt8](repeating: 0, count: (MemoryLayout<cmsghdr>.size) + MemoryLayout<UInt32>.size)
     var recvBuf = [UInt8](repeating: 0, count: Int(IP_MAXPACKET))
     var iov = iovec(iov_base: recvBuf.withUnsafeMutableBytes { $0.baseAddress }, iov_len: recvBuf.count)
-    var msghdr = msghdr(msg_name: nil, msg_namelen: 0,
+    var msghdr = msghdr(msg_name: withUnsafeMutablePointer(to: &srcAddr) { $0 }, msg_namelen: socklen_t(MemoryLayout.size(ofValue: srcAddr)),
                         msg_iov: withUnsafeMutablePointer(to: &iov) { $0 }, msg_iovlen: 1,
                         msg_control: cmsgBuf.withUnsafeMutableBytes { $0.baseAddress }, msg_controllen: socklen_t(cmsgBuf.count),
                         msg_flags: 0)
@@ -185,9 +188,31 @@ private func readCallback(socket: CFSocket?, type: CFSocketCallBackType, address
     mach_timebase_info(&timebase)
     let rtt = (recvTime - action.sendTime)*UInt64(timebase.numer)/UInt64(timebase.denom);
     
+    let src: String?
+    switch Int32(srcAddr.ss_family) {
+        case AF_INET:
+            src = withUnsafeBytes(of: &srcAddr) { srcAddrPtr in
+                var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                var addr = srcAddrPtr.load(as: sockaddr_in.self).sin_addr
+                inet_ntop(AF_INET, &addr, &buf, socklen_t(INET_ADDRSTRLEN))
+                return String(cString: buf)
+            }
+            
+        case AF_INET6:
+            src = withUnsafeBytes(of: &srcAddr) { srcAddrPtr in
+                var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                var addr = srcAddrPtr.load(as: sockaddr_in6.self).sin6_addr
+                inet_ntop(AF_INET6, &addr, &buf, socklen_t(INET6_ADDRSTRLEN))
+                return String(cString: buf)
+            }
+            
+        default: src = nil
+    }
+    
     let result = PingResult(seq: sequenceNumber,
                             error: error,
                             ttl: timeToLive,
-                            rtt: Double(rtt)/1.0e6)
+                            rtt: Double(rtt)/1.0e6,
+                            src: src)
     action.complete(with: result)
 }
