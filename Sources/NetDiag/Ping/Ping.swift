@@ -130,8 +130,8 @@ public class Ping {
         }
     }
     
-    public func setMaxTTL(_ ttl: Int32) {
-        var ttl = ttl
+    public func setMaxTTL(_ ttl: UInt8) {
+        var ttl = Int32(ttl)
         switch address {
             case .ipv4:
                 setsockopt(CFSocketGetNative(socket), IPPROTO_IP, IP_TTL, &ttl, socklen_t(MemoryLayout<Int32>.size))
