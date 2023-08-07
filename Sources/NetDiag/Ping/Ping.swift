@@ -10,7 +10,7 @@ import Foundation
 
 public enum PingError: Error {
     case socketError
-    case timeout
+    case timedOut
     case unexpectedPacket
     case timeToLiveExceeded
 }
@@ -120,7 +120,7 @@ public class Ping {
                 }
                 self.actions[sequenceNumber] = nil
                 
-                let result = PingResult(seq: sequenceNumber, error: PingError.timeout)
+                let result = PingResult(seq: sequenceNumber, error: PingError.timedOut)
                 action.complete(with: result)
             }
             actions[sequenceNumber] = action
