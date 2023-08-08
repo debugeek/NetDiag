@@ -27,8 +27,8 @@ public class Traceroute {
     private let ping: Ping?
     private let callback: ((TracerouteResult, Bool) -> Void)?
     
-    public init?(address: Address, callback: @escaping (_ result: TracerouteResult, _ stopped: Bool) -> Void) {
-        self.ping = Ping(address: address)
+    public init?(endpoint: EndPoint, callback: @escaping (_ result: TracerouteResult, _ stopped: Bool) -> Void) {
+        self.ping = Ping(endpoint: endpoint)
         self.callback = callback
     }
     

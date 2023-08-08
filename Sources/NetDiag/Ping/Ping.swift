@@ -57,7 +57,7 @@ private class PingAction {
 public class Ping {
     
     fileprivate var socket: CFSocket?
-    fileprivate var address: Address
+    fileprivate let endpoint: EndPoint
     fileprivate let factory: PingFactory
     
     fileprivate let identifier: UInt16 = UInt16.random(in: .min ... .max)
@@ -65,11 +65,11 @@ public class Ping {
     
     fileprivate var actions = [UInt16: PingAction]()
     
-    public init?(address: Address) {
-        self.address = address
+    public init?(endpoint: EndPoint) {
+        self.endpoint = endpoint
         
         let fd: Int32
-        switch address {
+        switch endpoint.address {
             case .ipv4:
                 fd = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP)
                 self.factory = PingFactoryV4()
@@ -86,7 +86,7 @@ public class Ping {
         self.socket = CFSocketCreateWithNative(kCFAllocatorDefault, fd, CFSocketCallBackType.readCallBack.rawValue, readCallback, &context)
         
         var opt: Int32 = 1
-        switch address {
+        switch endpoint.address {
             case .ipv4:
                 setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &opt, socklen_t(MemoryLayout<Int32>.size))
                 
@@ -105,7 +105,7 @@ public class Ping {
         let sendBuf = factory.buildPacket(identifier: identifier, sequenceNumber: sequenceNumber, payload: payload)
         let bytesSent = sendBuf.withUnsafeBytes { sendBufPtr in
             guard let sendBufPtrAddr = sendBufPtr.baseAddress else { return -1 }
-            return withUnsafePointer(to: address.sockaddr_storage) { storagePtr in
+            return withUnsafePointer(to: endpoint.sockaddr_storage) { storagePtr in
                 storagePtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { addrPtr in
                     sendto(CFSocketGetNative(socket), sendBufPtrAddr, sendBufPtr.count, 0, addrPtr, socklen_t(addrPtr.pointee.sa_len))
                 }
@@ -132,7 +132,7 @@ public class Ping {
     
     public func setMaxTTL(_ ttl: UInt8) {
         var ttl = Int32(ttl)
-        switch address {
+        switch endpoint.address {
             case .ipv4:
                 setsockopt(CFSocketGetNative(socket), IPPROTO_IP, IP_TTL, &ttl, socklen_t(MemoryLayout<Int32>.size))
             case .ipv6:
