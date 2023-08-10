@@ -35,12 +35,12 @@ private class PingAction {
         self.sendTime = sendTime
     }
     
-    var completion: ((PingResult) -> Void)?
+    var block: ((PingResult) -> Void)?
     
     var timer: Timer?
     
     func complete(with result: PingResult) {
-        guard let completion = completion else {
+        guard let block = block else {
             return
         }
         
@@ -49,8 +49,8 @@ private class PingAction {
             self.timer = nil
         }
         
-        completion(result)
-        self.completion = nil
+        block(result)
+        self.block = nil
     }
 }
 
@@ -98,7 +98,7 @@ public class Ping {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.defaultMode)
     }
     
-    public func sendPing(payload: Data? = nil, timeout: TimeInterval = 1, completion: @escaping ((PingResult) -> Void)) {
+    public func sendPing(payload: Data? = nil, timeout: TimeInterval = 1, usingBlock block: @escaping ((PingResult) -> Void)) {
         let sequenceNumber = nextSequenceNumber
         nextSequenceNumber += 1
 
@@ -113,7 +113,7 @@ public class Ping {
         }
         if bytesSent > 0 {
             let action = PingAction(sendTime: mach_absolute_time())
-            action.completion = completion
+            action.block = block
             action.timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] timer in
                 guard let self = self, let action = self.actions[sequenceNumber] else {
                     return
@@ -126,7 +126,7 @@ public class Ping {
             actions[sequenceNumber] = action
         } else {
             let result = PingResult(seq: sequenceNumber, error: PingError.socketError)
-            completion(result)
+            block(result)
         }
     }
     

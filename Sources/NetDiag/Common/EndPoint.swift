@@ -13,7 +13,7 @@ public struct EndPoint {
     let address: Address
     let port: uint16
 
-    public init(address: Address, port: UInt16) {
+    public init(address: Address, port: UInt16 = 0) {
         self.address = address
         self.port = port
     }

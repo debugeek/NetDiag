@@ -25,42 +25,39 @@ public class Traceroute {
     public var waitTime: TimeInterval = 5
     
     private let ping: Ping?
-    private let callback: ((TracerouteResult, Bool) -> Void)?
+    private var block: ((TracerouteResult, Bool) -> Void)?
     
-    public init?(endpoint: EndPoint, callback: @escaping (_ result: TracerouteResult, _ stopped: Bool) -> Void) {
+    public init(endpoint: EndPoint) {
         self.ping = Ping(endpoint: endpoint)
-        self.callback = callback
     }
-    
-    public func start() {
+
+    public func start(usingBlock block: @escaping (_ result: TracerouteResult, _ stopped: Bool) -> Void) {
         assert(maxTTL > 0, "maxTTL must be > 0")
         assert(maxTTL <= 255, "maxTTL must be <= 255")
         assert(firstTTL > 0, "firstTTL must be > 0")
         assert(firstTTL <= 255, "firstTTL must be <= 255")
         assert(firstTTL < maxTTL, "firstTTL (\(firstTTL)) may not be greater than maxTTL (\(maxTTL)")
         assert(probesPerHop > 0, "probesPerHop must be > 0")
-        
+
+        self.block = block
+
         sendPing(firstTTL, 0)
     }
     
     func sendPing(_ ttl: UInt8, _ retry: UInt) {
         ping?.setMaxTTL(ttl)
-        ping?.sendPing(timeout: waitTime) { [weak self] result in
-            self?.didReceive(result, ttl, retry)
-        }
-    }
-    
-    func didReceive(_ pingResult: PingResult, _ ttl: UInt8, _ retry: UInt) {
-        let result = TracerouteResult(seq: ttl, src: pingResult.src, retry: retry, rtt: pingResult.rtt)
-        
-        if retry + 1 < probesPerHop {
-            callback?(result, false)
-            sendPing(ttl, retry + 1)
-        } else if ttl + 1 < maxTTL, pingResult.error != nil {
-            callback?(result, false)
-            sendPing(ttl + 1, 0)
-        } else {
-            callback?(result, true)
+        ping?.sendPing(timeout: waitTime) { pingResult in
+            let result = TracerouteResult(seq: ttl, src: pingResult.src, retry: retry, rtt: pingResult.rtt)
+
+            if retry + 1 < self.probesPerHop {
+                self.block?(result, false)
+                self.sendPing(ttl, retry + 1)
+            } else if ttl + 1 < self.maxTTL, pingResult.error != nil {
+                self.block?(result, false)
+                self.sendPing(ttl + 1, 0)
+            } else {
+                self.block?(result, true)
+            }
         }
     }
     
