@@ -9,8 +9,8 @@
 import Foundation
 
 public struct TCPScanResult {
-    let endpoint: EndPoint
-    let reachable: Bool
+    public let endpoint: EndPoint
+    public let reachable: Bool
 }
 
 public class TCPScanner {

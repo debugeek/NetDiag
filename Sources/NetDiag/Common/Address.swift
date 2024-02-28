@@ -17,10 +17,10 @@ extension Address {
     
     public var sa_family: Darwin.sa_family_t {
         switch self {
-            case .ipv4:
-                return Darwin.sa_family_t(AF_INET)
-            case .ipv6:
-                return Darwin.sa_family_t(AF_INET6)
+        case .ipv4:
+            return Darwin.sa_family_t(AF_INET)
+        case .ipv6:
+            return Darwin.sa_family_t(AF_INET6)
         }
     }
 

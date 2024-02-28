@@ -10,41 +10,55 @@ import Foundation
 
 public struct NetDiag {
 
-    public static func ping(_ destination: String, usingBlock block: @escaping ((PingResult) -> Void)) {
-        let resolver = DNSResolver(hostname: destination) { addresses, error in
-            guard let address = addresses?.first, error == nil else {
+    public static func ping(_ destination: String, 
+                            queue: DispatchQueue = .global(),
+                            usingBlock block: @escaping ((PingResult) -> Void)) {
+        queue.async {
+            let resolver = DNSResolver()
+            guard let address = resolver.resolve(destination)?.first else {
                 return
             }
 
             let endpoint = EndPoint(address: address)
-            let ping = Ping(endpoint: endpoint)
-            ping?.sendPing(usingBlock: { result in
-                block(result)
-            })
+            guard let ping = Ping(endpoint: endpoint) else {
+                return
+            }
+
+            let result = ping.ping()
+            block(result)
         }
-        resolver.start()
     }
 
-    public static func traceroute(_ destination: String, usingBlock block: @escaping ((TracerouteResult, Bool) -> Void)) {
-        let resolver = DNSResolver(hostname: destination) { addresses, error in
-            guard let address = addresses?.first, error == nil else {
+    public static func traceroute(_ destination: String, 
+                                  queue: DispatchQueue = .global(),
+                                  usingBlock block: @escaping ((TracerouteResult, Bool) -> Void)) {
+        queue.async {
+            let resolver = DNSResolver()
+            guard let address = resolver.resolve(destination)?.first else {
                 return
             }
 
             let endpoint = EndPoint(address: address)
-            let traceroute = Traceroute(endpoint: endpoint)
+            guard let traceroute = Traceroute(endpoint: endpoint) else {
+                return
+            }
             traceroute.waitTime = 1
             traceroute.probesPerHop = 1
-            traceroute.start(usingBlock: { result, stopped in
+            traceroute.trace { result, stopped in
                 block(result, stopped)
-            })
+            }
         }
-        resolver.start()
     }
 
-    public static func scan(_ destination: String, _ ports: [UInt16], timeout: TimeInterval, maxConcurrentOperationCount: Int, usingBlock block: @escaping ((TCPScanResult) -> Void)) {
-        let resolver = DNSResolver(hostname: destination) { addresses, error in
-            guard let address = addresses?.first, error == nil else {
+    public static func scan(_ destination: String, 
+                            _ ports: [UInt16],
+                            timeout: TimeInterval,
+                            maxConcurrentOperationCount: Int,
+                            queue: DispatchQueue = .global(),
+                            usingBlock block: @escaping ((TCPScanResult) -> Void)) {
+        queue.async {
+            let resolver = DNSResolver()
+            guard let address = resolver.resolve(destination)?.first else {
                 return
             }
 
@@ -54,7 +68,6 @@ public struct NetDiag {
                 block(result)
             }
         }
-        resolver.start()
     }
 
 }

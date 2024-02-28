@@ -17,21 +17,23 @@ public struct TracerouteResult {
 
 public class Traceroute {
 
-    public var probesPerHop: Int = 3
-    
+    public var probesPerHop: UInt = 3
+
     public var firstTTL: UInt8 = 1
     public var maxTTL: UInt8 = 30
     
     public var waitTime: TimeInterval = 5
     
-    private let ping: Ping?
-    private var block: ((TracerouteResult, Bool) -> Void)?
+    private let ping: Ping
     
-    public init(endpoint: EndPoint) {
-        self.ping = Ping(endpoint: endpoint)
+    public init?(endpoint: EndPoint) {
+        guard let ping = Ping(endpoint: endpoint) else {
+            return nil
+        }
+        self.ping = ping
     }
 
-    public func start(usingBlock block: @escaping (_ result: TracerouteResult, _ stopped: Bool) -> Void) {
+    public func trace(queue: DispatchQueue = .global(), usingBlock block: @escaping (TracerouteResult, Bool) -> Void) {
         assert(maxTTL > 0, "maxTTL must be > 0")
         assert(maxTTL <= 255, "maxTTL must be <= 255")
         assert(firstTTL > 0, "firstTTL must be > 0")
@@ -39,24 +41,31 @@ public class Traceroute {
         assert(firstTTL < maxTTL, "firstTTL (\(firstTTL)) may not be greater than maxTTL (\(maxTTL)")
         assert(probesPerHop > 0, "probesPerHop must be > 0")
 
-        self.block = block
+        queue.async {
+            var ttl = self.firstTTL
+            var retry: UInt = 0
 
-        sendPing(firstTTL, 0)
-    }
-    
-    func sendPing(_ ttl: UInt8, _ retry: UInt) {
-        ping?.setMaxTTL(ttl)
-        ping?.sendPing(timeout: waitTime) { pingResult in
-            let result = TracerouteResult(seq: ttl, src: pingResult.src, retry: retry, rtt: pingResult.rtt)
+            while true {
+                self.ping.setMaxTTL(ttl)
 
-            if retry + 1 < self.probesPerHop {
-                self.block?(result, false)
-                self.sendPing(ttl, retry + 1)
-            } else if ttl + 1 < self.maxTTL, pingResult.error != nil {
-                self.block?(result, false)
-                self.sendPing(ttl + 1, 0)
-            } else {
-                self.block?(result, true)
+                let result = self.ping.ping(timeout: self.waitTime)
+
+                var stopped = false
+                if retry + 1 < self.probesPerHop {
+                    retry += 1
+                } else if ttl + 1 < self.maxTTL, result.error != nil {
+                    retry = 0
+                    ttl += 1
+                } else {
+                    stopped = true
+                }
+                block(TracerouteResult(seq: ttl,
+                                       src: result.src,
+                                       retry: retry,
+                                       rtt: result.rtt), stopped)
+                if stopped {
+                    break
+                }
             }
         }
     }
